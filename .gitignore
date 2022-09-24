@@ -14,6 +14,11 @@ CIFAR10_RES
 MNIST/Final2
 CIFAR10/Final2
 CIFAR10/*.sh
+CIFAR10/logfile
+CIFAR10/slurm_files
+CIFAR10/*.log
+CIFAR10/submit.sb
 MNIST/*.sh
 MNIST/Selected_6Sep
 .ipynb_checkpoints
+requirements.txt
