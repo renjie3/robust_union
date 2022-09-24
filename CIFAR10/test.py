@@ -1,8 +1,37 @@
+import argparse
+
+parser = argparse.ArgumentParser(description='Adversarial Training for CIFAR10', formatter_class=argparse.RawTextHelpFormatter)
+parser.add_argument("-gpu_id", help="Id of GPU to be used", type=int, default = 0)
+parser.add_argument("-model", help="Type of Adversarial Training: \n\t 0: l_inf \n\t 1: l_1 \n\t 2: l_2 \n\t 3: msd \n\t 4: triple \n\t 5: worst \n\t 6: vanilla", type=int, default = 3)
+parser.add_argument("-batch_size", help = "Batch Size for Test Set (Default = 1000)", type = int, default = 1000)
+parser.add_argument("-attack", help = "Foolbox = 0; Custom PGD = 1, Min PGD = 2, Fast DDN = 3", type = int, default = 0)
+parser.add_argument("-restarts", help = "Default = 10", type = int, default = 2)
+parser.add_argument("-path", help = "To override default model fetching- Automatically appends '.pt' to path", type = str)
+parser.add_argument("-subset", help = "Subset of attacks", type = int, default = -1)
+parser.add_argument("--alpha", type=float, default = 0.05)
+parser.add_argument("--alpha_topk", type=float, default = 0.05)
+parser.add_argument("--alpha_top1", type=float, default = 0.05)
+parser.add_argument("--pgd_norm", type=int, default = 0)
+parser.add_argument("--num_iter", type=int, default = 50)
+parser.add_argument("--num_stop", type=int, default = 500)
+parser.add_argument("--seed", type=int, default = 0)
+parser.add_argument('--test_subset', action='store_true', default=False)
+parser.add_argument("--job_id", type=str, default = 'local')
+parser.add_argument('--local', default='', type=str, help='The gpu number used on developing node.')
+
+
+params = parser.parse_args()
+
+import os
+if params.local != '':
+    os.environ["CUDA_VISIBLE_DEVICES"] = params.local
+
 import sys
 sys.path.append('./models/')
 import torch
 from models import PreActResNet18
 import numpy as np
+import random
 import matplotlib
 import matplotlib.pyplot as plt
 from torchvision.datasets import CIFAR10
@@ -10,32 +39,17 @@ from torch.utils.data import DataLoader, TensorDataset
 import torchvision.transforms as transforms
 import torch.optim as optim
 import torch.nn as nn
-import time
 sys.path.append('./utils/')
 from core import *
 from torch_backend import *
-import ipdb
-import sys 
+import ipdb 
 import foolbox
 import foolbox.attacks as fa
 from cifar_funcs import *
-import argparse
 from time import time
 from fast_adv.attacks import DDN
 
 # python3 test.py -gpu_id 0 -model 0 -batch_size 1 -attack 0 -restarts 10
-
-parser = argparse.ArgumentParser(description='Adversarial Training for CIFAR10', formatter_class=argparse.RawTextHelpFormatter)
-parser.add_argument("-gpu_id", help="Id of GPU to be used", type=int, default = 0)
-parser.add_argument("-model", help="Type of Adversarial Training: \n\t 0: l_inf \n\t 1: l_1 \n\t 2: l_2 \n\t 3: msd \n\t 4: triple \n\t 5: worst \n\t 6: vanilla", type=int, default = 3)
-parser.add_argument("-batch_size", help = "Batch Size for Test Set (Default = 1000)", type = int, default = 1000)
-parser.add_argument("-attack", help = "Foolbox = 0; Custom PGD = 1, Min PGD = 2, Fast DDN = 3", type = int, default = 0)
-parser.add_argument("-restarts", help = "Default = 10", type = int, default = 10)
-parser.add_argument("-path", help = "To override default model fetching- Automatically appends '.pt' to path", type = str)
-parser.add_argument("-subset", help = "Subset of attacks", type = int, default = -1)
-
-
-params = parser.parse_args()
 
 device_id = params.gpu_id
 batch_size = params.batch_size
@@ -49,6 +63,18 @@ subset = params.subset
 device = torch.device("cuda:{0}".format(device_id) if torch.cuda.is_available() else "cpu")
 torch.cuda.set_device(int(device_id))
 
+if torch.cuda.is_available():
+    # torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(params.seed)
+    torch.manual_seed(params.seed)
+    torch.cuda.manual_seed_all(params.seed)
+    np.random.seed(params.seed)
+    random.seed(params.seed)
+
+    # torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    device = torch.device('cuda')
 
 DATA_DIR = './data'
 dataset = cifar10(DATA_DIR)
@@ -117,9 +143,9 @@ def test_foolbox(model_name, max_tests):
     print(model_name)
     torch.manual_seed(0)
     model = PreActResNet18().cuda()
-    for m in model.children(): 
-        if not isinstance(m, nn.BatchNorm2d):
-            m.half()   
+    # for m in model.children(): 
+    #     if not isinstance(m, nn.BatchNorm2d):
+    #         m.half()   
     model_address = model_name + ".pt"
     model.load_state_dict(torch.load(model_address, map_location = device))
     model.eval()    
@@ -203,17 +229,17 @@ def test_foolbox(model_name, max_tests):
 def test_pgd(model_name, clean = False):
     #Computes the adversarial accuracy at standard thresholds of (0.3,1.5,12) for first 1000 images
 
-    print (model_name)
+    print(model_name)
     print(device)
     test_batches = Batches(test_set, batch_size, shuffle=False, num_workers=2, gpu_id = torch.cuda.current_device())
     model = PreActResNet18().to(device)
-    for m in model.children(): 
-        if not isinstance(m, nn.BatchNorm2d):
-            m.half()   
+    # for m in model.children(): 
+    #     if not isinstance(m, nn.BatchNorm2d):
+    #         m.half()   
             
     criterion = nn.CrossEntropyLoss()
 
-    import time
+    # import time
     start_time = time()
 
     model.load_state_dict(torch.load(model_name+".pt", map_location = device))
@@ -225,14 +251,40 @@ def test_pgd(model_name, clean = False):
         total_loss, total_acc = epoch(test_batches, lr_schedule, model, epoch_i, criterion, opt = None, device = device, stop = (not clean))
     except:
         total_loss, total_acc = epoch(test_batches, lr_schedule, model, epoch_i, criterion, opt = None, device = device, stop = (not clean))
-        print('Test Acc Clean: {0:.4f}'.format(total_acc))
-    total_loss, total_acc_1 = epoch_adversarial(test_batches,None,  model, epoch_i, pgd_l1_topk,device = device, stop = True, restarts = res)
-    print('Test Acc 1: {0:.4f}'.format(total_acc_1))    
-    total_loss, total_acc_2 = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l2, device = device, stop = True, restarts = res, epsilon = 0.5, num_iter = 500, alpha = 0.01)
-    print('Test Acc 2: {0:.4f}'.format(total_acc_2))    
-    total_loss, total_acc_inf = epoch_adversarial(test_batches, None, model, epoch_i, pgd_linf, device = device, stop = True, restarts = res)
-    print('Test Acc Inf: {0:.4f}'.format(total_acc_inf))    
-
+    print('Test Acc Clean: {0:.4f}'.format(total_acc))
+    # for i in range(5, 21, 1):
+    #     print('i', i)
+    #     total_loss, total_acc_l1_sign_free = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l1_sign_free, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = res, alpha = params.alpha * i, num_iter = params.num_iter)
+    #     print('Test Acc L1 signfree: {0:.4f}'.format(total_acc_l1_sign_free))
+    if params.pgd_norm == 7:
+        total_loss, total_acc_l1_sign_free = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l1_sign_free, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = res, alpha = params.alpha, num_iter = params.num_iter)
+        print('Test Acc L1 signfree: {0:.4f}'.format(total_acc_l1_sign_free))
+    elif params.pgd_norm == 10:
+        total_loss, total_acc_l1_sign_free = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l1_sign_free_momentum, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = res, alpha = params.alpha, num_iter = params.num_iter)
+        print('Test acc_l1_sign_free_momentum: {0:.4f}'.format(total_acc_l1_sign_free))
+    elif params.pgd_norm == 1:
+        total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha_topk)
+        print('Test Acc 1: {0:.4f}'.format(total_acc_1))
+    elif params.pgd_norm == 2:
+        total_loss, total_acc_2 = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l2, device = device, stop = True, num_stop=params.num_stop, restarts = res, epsilon = 0.5, num_iter = params.num_iter, alpha = params.alpha_l2)
+        print('Test Acc 2: {0:.4f}'.format(total_acc_2))
+    elif params.pgd_norm == 0:
+        total_loss, total_acc_inf = epoch_adversarial(test_batches, None, model, epoch_i, pgd_linf, device = device, stop = True, num_stop=params.num_stop, num_iter = params.num_iter, restarts = res)
+        print('Test Acc Inf: {0:.4f}'.format(total_acc_inf))
+    elif params.pgd_norm == 8:
+        total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_top1, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha_topk)
+        print('Test Acc 1: {0:.4f}'.format(total_acc_1))
+    elif params.pgd_norm == 9:
+        total_loss, total_acc_l1_sign_free = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l1_sign_free, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = res, alpha = params.alpha, num_iter = params.num_iter)
+        print('Test Acc L1 signfree: {0:.4f}'.format(total_acc_l1_sign_free))
+        total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha_topk)
+        print('Test Acc 1: {0:.4f}'.format(total_acc_1))
+        total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_top1, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha_topk)
+        print('Test Acc 1: {0:.4f}'.format(total_acc_1))
+        total_loss, total_acc_2 = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l2, device = device, stop = True, num_stop=params.num_stop, restarts = res, epsilon = 0.5, num_iter = params.num_iter, alpha = params.alpha_l2)
+        print('Test Acc 2: {0:.4f}'.format(total_acc_2))
+        total_loss, total_acc_inf = epoch_adversarial(test_batches, None, model, epoch_i, pgd_linf, device = device, stop = True, num_stop=params.num_stop, num_iter = params.num_iter, restarts = res)
+        print('Test Acc Inf: {0:.4f}'.format(total_acc_inf))
 
 def fast_adversarial_DDN(model_name):
     #Saves the minimum epsilon value for successfully attacking each image via PGD based attack as an npy file in the folder corresponding to model_name
@@ -282,9 +334,9 @@ def test_saver(model_name):
     attacks_l2 = torch.ones((batch_size, 12))*1000
     attacks_linf = torch.ones((batch_size, 12))*1000
     model = PreActResNet18().cuda()
-    for m in model.children(): 
-        if not isinstance(m, nn.BatchNorm2d):
-            m.half()   
+    # for m in model.children(): 
+    #     if not isinstance(m, nn.BatchNorm2d):
+    #         m.half()   
             
     model_address = model_name + ".pt"
     model.load_state_dict(torch.load(model_address, map_location = device))
