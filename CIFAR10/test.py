@@ -263,7 +263,7 @@ def test_pgd(model_name, clean = False):
         total_loss, total_acc_l1_sign_free = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l1_sign_free_momentum, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = res, alpha = params.alpha, num_iter = params.num_iter)
         print('Test acc_l1_sign_free_momentum: {0:.4f}'.format(total_acc_l1_sign_free))
     elif params.pgd_norm == 1:
-        total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha_topk)
+        total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha)
         print('Test Acc 1: {0:.4f}'.format(total_acc_1))
     elif params.pgd_norm == 2:
         total_loss, total_acc_2 = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l2, device = device, stop = True, num_stop=params.num_stop, restarts = res, epsilon = 0.5, num_iter = params.num_iter, alpha = params.alpha_l2)
@@ -272,14 +272,14 @@ def test_pgd(model_name, clean = False):
         total_loss, total_acc_inf = epoch_adversarial(test_batches, None, model, epoch_i, pgd_linf, device = device, stop = True, num_stop=params.num_stop, num_iter = params.num_iter, restarts = res)
         print('Test Acc Inf: {0:.4f}'.format(total_acc_inf))
     elif params.pgd_norm == 8:
-        total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_top1, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha_topk)
+        total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_top1, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha)
         print('Test Acc 1: {0:.4f}'.format(total_acc_1))
     elif params.pgd_norm == 9:
         total_loss, total_acc_l1_sign_free = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l1_sign_free, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = res, alpha = params.alpha, num_iter = params.num_iter)
         print('Test Acc L1 signfree: {0:.4f}'.format(total_acc_l1_sign_free))
         total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha_topk)
         print('Test Acc 1: {0:.4f}'.format(total_acc_1))
-        total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_top1, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha_topk)
+        total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_top1, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha_top1)
         print('Test Acc 1: {0:.4f}'.format(total_acc_1))
         total_loss, total_acc_2 = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l2, device = device, stop = True, num_stop=params.num_stop, restarts = res, epsilon = 0.5, num_iter = params.num_iter, alpha = params.alpha_l2)
         print('Test Acc 2: {0:.4f}'.format(total_acc_2))

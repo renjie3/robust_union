@@ -179,8 +179,8 @@ def pgd_l1_top1(model, X,y, epsilon = 12, alpha = 1, num_iter = 20, device = "cu
             print(output)
             print(y)
             raise('Norm is 0 again')
-        delta.data += alpha*correct*l1_dir_topk(delta.grad.detach(), delta.data, X, k)
-        top_dir = l1_dir_topk(delta.grad.detach(), delta.data, X, k)
+        # top_dir = l1_dir_top1(delta.grad.detach(), delta.data, X)
+        delta.data += alpha*correct*l1_dir_top1(delta.grad.detach(), delta.data, X)
         if (norms_l1(delta) > epsilon).any():
             delta.data = proj_l1ball(delta.data, epsilon, device)
             # print(norms_l1(delta.data))
@@ -205,7 +205,7 @@ def pgd_l1_top1(model, X,y, epsilon = 12, alpha = 1, num_iter = 20, device = "cu
             loss.backward()
             k = 100
             # alpha = 0.05/k*20
-            delta.data += alpha*correct*l1_dir_topk(delta.grad.detach(), delta.data, X,k)
+            delta.data += alpha*correct*l1_dir_top1(delta.grad.detach(), delta.data, X)
             if (norms_l1(delta) > epsilon).any():
                 delta.data = proj_l1ball(delta.data, epsilon, device)
             delta.data = torch.min(torch.max(delta.detach(), -X), 1-X) # clip X+delta to [0,1] 
@@ -562,6 +562,31 @@ def l1_dir_topk(grad, delta, X, k=20):
     optimal_perturbation = sign * tied_for_max / num_ties
 
     optimal_perturbation = torch.from_numpy(optimal_perturbation).to(delta.device)
+    return optimal_perturbation.view(batch_size, channels, pix, pix)
+
+def l1_dir_top1(grad, delta, X):
+    X_curr = X + delta
+    batch_size = X.shape[0]
+    channels = X.shape[1]
+    pix = X.shape[2]
+
+    grad = grad.detach().cpu().numpy()
+    abs_grad = np.abs(grad).reshape((batch_size, -1))
+    sign = np.sign(grad).reshape((batch_size, -1))
+
+    max_abs_grad = np.argmax(abs_grad, axis=1)
+    # max_abs_grad = np.stack([np.arange(50), max_abs_grad], axis=1)
+
+    l1_max_dir = np.zeros_like(abs_grad)
+    l1_max_dir[np.arange(50), max_abs_grad] = 1
+    
+    # print(l1_max_dir[:, :15])
+    # print(max_abs_grad.shape)
+    # input('check l1_dir_top1')
+
+    l1_max_dir *= sign
+
+    optimal_perturbation = torch.from_numpy(l1_max_dir).to(delta.device)
     return optimal_perturbation.view(batch_size, channels, pix, pix)
 
 def proj_l1ball(x, epsilon=10, device = "cuda:0"):
