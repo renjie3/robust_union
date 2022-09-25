@@ -75,7 +75,7 @@ dependencies:
     - idna==3.3
     - jsonpatch==1.32
     - jsonpointer==2.3
-    - matplotlib==2.0.0
+    - matplotlib==2.2.2
     - numpy==1.21.6
     - pandas==0.24.2
     - pillow==6.1.0
