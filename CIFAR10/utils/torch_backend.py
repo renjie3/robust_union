@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from torch import nn
 import torchvision
+from torchvision import transforms
 from core import build_graph, cat, to_numpy
 
 torch.backends.cudnn.benchmark = True
@@ -40,6 +41,27 @@ def cifar10(root):
         'train': {'data': train_set.data, 'labels': train_set.targets},
         'test': {'data': test_set.data, 'labels': test_set.targets}
     }
+
+transform_train = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+])
+
+transform_test = transforms.Compose([
+    transforms.ToTensor(),
+])
+
+def set_dataset(root, params):
+    if params.dataset == 'cifar10':
+        train_set = torchvision.datasets.CIFAR10(root=root, train=True, download=True, transform=transform_train)
+        test_set = torchvision.datasets.CIFAR10(root=root, train=False, download=True, transform=transform_test)
+    elif params.dataset == 'cifar100':
+        train_set = torchvision.datasets.CIFAR100(root=root, train=True, download=True, transform=transform_train)
+        test_set = torchvision.datasets.CIFAR100(root=root, train=False, download=True, transform=transform_test)
+    else:
+        raise('Dataset not implimented.')
+    return train_set, test_set
 
 #####################
 ## data loading

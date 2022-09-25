@@ -727,6 +727,34 @@ def epoch(loader, lr_schedule,  model, epoch_i, criterion = nn.CrossEntropyLoss(
         
     return train_loss / train_n, train_acc / train_n
 
+def epoch_recon(loader,  model, epoch_i, criterion = nn.CrossEntropyLoss(), opt=None, device = "cuda:0", stop = False):
+    """Standard training/evaluation epoch over the dataset"""
+    train_loss = 0
+    train_acc = 0
+    train_n = 0
+    loader_bar = tqdm(loader)
+    for i,batch in enumerate(loader_bar): 
+        X,y = batch
+        X, y = X.to(device), y.to(device)
+        output = model(X)
+        loss = criterion(output, y)        
+        if opt != None:   
+            # lr = lr_schedule(epoch_i + (i+1)/len(loader))
+            # opt.param_groups[0].update(lr=lr)
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+        
+        train_loss += loss.item()*y.size(0)
+        train_acc += (output.max(1)[1] == y).sum().item()
+        train_n += y.size(0)
+        loader_bar.set_description('Epoch: [{}] Loss:{:.2f} Acc:{:.2f}%'.format(epoch_i, train_loss / train_n, train_acc / train_n * 100))
+
+        if stop:
+            break
+        
+    return train_loss / train_n, train_acc / train_n
+
 
 def epoch_adversarial_saver(batch_size,loader, model, attack, epsilon, num_iter, device = "cuda:0", restarts = 10):
     criterion = nn.CrossEntropyLoss()
@@ -797,6 +825,51 @@ def epoch_adversarial(loader, lr_schedule, model, epoch_i, attack, criterion = n
         
     return train_loss / train_n, train_acc / train_n
 
+def epoch_adversarial_recon(loader, model, epoch_i, attack, criterion = nn.CrossEntropyLoss(), 
+    opt=None, device = "cuda:0", stop = False, stats = False, num_stop=500, **kwargs):
+    """Adversarial training/evaluation epoch over the dataset"""
+    train_loss = 0
+    train_acc = 0
+    train_n = 0
+    train_l0 = 0
+    train_l1 = 0
+#     ipdb.set_trace()
+
+    loader_bar = tqdm(loader)
+    
+    for i,batch in enumerate(loader_bar): 
+        # print(i, len(loader))
+        X,y = batch
+        X, y = X.to(device), y.to(device)
+        if stats:
+            delta = attack(model, X, y, device = device, batchid = i, **kwargs)
+        else:
+            delta = attack(model, X, y, device = device, **kwargs)
+
+        batch_l0 = torch.sum(norms_l0(delta)).item()
+        batch_l1 = torch.sum(norms_l1(delta)).item()
+        train_l0 += batch_l0
+        train_l1 += batch_l1
+        
+        output = model(X+delta)
+
+        loss = criterion(output, y)
+        train_loss += loss.item()*y.size(0)
+        train_acc += (output.max(1)[1] == y).sum().item()
+        train_n += y.size(0)
+        loader_bar.set_description('Epoch: [{}] Loss:{:.2f} Acc:{:.2f}% Norm_l0:{:.2f} Norm_l1:{:.2f}'.format(epoch_i, train_loss / train_n, train_acc / train_n * 100, train_l0 / train_n, train_l1 / train_n))
+
+        if opt != None:   
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+        else:
+            if (stop):
+                if train_n >= num_stop:
+                    break
+        
+    return train_loss / train_n, train_acc / train_n
+
 
 def triple_adv(loader, lr_schedule, model, epoch_i, attack,  criterion = nn.CrossEntropyLoss(),
                      opt=None, device= "cuda:0", epsilon_l_1 = 12, epsilon_l_2 = 0.5, epsilon_l_inf = 0.03, num_iter = 50):
@@ -809,6 +882,67 @@ def triple_adv(loader, lr_schedule, model, epoch_i, attack,  criterion = nn.Cros
         X,y = batch['input'], batch['target']
         lr = lr_schedule(epoch_i + (i+1)/len(loader))
         opt.param_groups[0].update(lr=lr)
+        ##Always calls the default version 0 for the individual attacks
+
+        #L1
+        delta = pgd_l1_topk(model, X, y, device = device, epsilon = epsilon_l_1)
+        output = model(X+delta)
+        loss = criterion(output,y)
+        train_loss += loss.item()*y.size(0)
+        train_acc += (output.max(1)[1] == y).sum().item()
+        train_n += y.size(0)
+        
+        if opt:
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+        
+        #L2
+        delta = pgd_l2(model, X, y, device = device, epsilon = epsilon_l_2)
+        output = model(X+delta)
+        loss = nn.CrossEntropyLoss()(output,y)
+        train_loss += loss.item()*y.size(0)
+        train_acc += (output.max(1)[1] == y).sum().item()
+        train_n += y.size(0)
+
+        if opt:
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+        
+
+        #Linf
+        delta = pgd_linf(model, X, y, device = device, epsilon = epsilon_l_inf)
+        output = model(X+delta)
+        loss = nn.CrossEntropyLoss()(output,y)
+        train_loss += loss.item()*y.size(0)
+        train_acc += (output.max(1)[1] == y).sum().item()
+        train_n += y.size(0)
+
+        if opt:
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+        
+        else:
+            break
+        # break
+    return train_loss / train_n, train_acc / train_n
+
+def triple_adv(loader, model, epoch_i, attack,  criterion = nn.CrossEntropyLoss(),
+                     opt=None, device= "cuda:0", epsilon_l_1 = 12, epsilon_l_2 = 0.5, epsilon_l_inf = 0.03, num_iter = 50):
+    
+    train_loss = 0
+    train_acc = 0
+    train_n = 0
+
+    loader_bar = tqdm(loader)
+
+    for i,batch in enumerate(loader_bar): 
+        X,y = batch
+        X, y = X.to(device), y.to(device)
+        # lr = lr_schedule(epoch_i + (i+1)/len(loader))
+        # opt.param_groups[0].update(lr=lr)
         ##Always calls the default version 0 for the individual attacks
 
         #L1
