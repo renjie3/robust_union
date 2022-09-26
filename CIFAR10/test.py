@@ -237,7 +237,7 @@ def test_pgd(model_name, clean = False):
         num_classes = 10
     elif params.dataset == 'cifar100':
         num_classes = 100
-    model = PreActResNet18(num_classes=num_classes).to(device)
+    model = PreActResNet18(num_classes=10).to(device)
     # for m in model.children(): 
     #     if not isinstance(m, nn.BatchNorm2d):
     #         m.half()   

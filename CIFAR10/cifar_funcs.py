@@ -707,7 +707,8 @@ def epoch(loader, lr_schedule,  model, epoch_i, criterion = nn.CrossEntropyLoss(
     train_loss = 0
     train_acc = 0
     train_n = 0
-    for i,batch in enumerate(loader): 
+    loader_bar = tqdm(loader)
+    for i,batch in enumerate(loader_bar): 
         X,y = batch['input'], batch['target']
         output = model(X)
         loss = criterion(output, y)        
@@ -721,6 +722,7 @@ def epoch(loader, lr_schedule,  model, epoch_i, criterion = nn.CrossEntropyLoss(
         train_loss += loss.item()*y.size(0)
         train_acc += (output.max(1)[1] == y).sum().item()
         train_n += y.size(0)
+        loader_bar.set_description('Epoch: [{}] Loss:{:.2f} Acc:{:.2f}%'.format(epoch_i, train_loss / train_n, train_acc / train_n * 100))
 
         if stop:
             break

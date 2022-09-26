@@ -23,3 +23,4 @@ MNIST/*.sh
 MNIST/Selected_6Sep
 .ipynb_checkpoints
 requirements.txt
+*.pyc
