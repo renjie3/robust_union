@@ -237,7 +237,7 @@ def test_pgd(model_name, clean = False):
         num_classes = 10
     elif params.dataset == 'cifar100':
         num_classes = 100
-    model = PreActResNet18(num_classes=10).to(device)
+    model = PreActResNet18(num_classes=num_classes).to(device)
     # for m in model.children(): 
     #     if not isinstance(m, nn.BatchNorm2d):
     #         m.half()   
@@ -288,10 +288,14 @@ def test_pgd(model_name, clean = False):
         # total_loss, total_acc_inf = epoch_adversarial(test_batches, None, model, epoch_i, pgd_linf, device = device, stop = True, num_stop=params.num_stop, num_iter = params.num_iter, restarts = res)
         # print('Test Acc Inf: {0:.4f}'.format(total_acc_inf))
     elif params.pgd_norm == 11:
-        for i in range(13):
-            step_alpha = params.alpha + i*0.1
+        for i in range(5):
+            step_alpha = params.alpha + i*0.01
             total_loss, total_acc_l1_sign_free = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l1_sign_free, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = res, alpha = step_alpha, num_iter = params.num_iter)
             print('Alpha: {:.4f}. Test Acc L1 signfree: {:.4f}'.format(step_alpha, total_acc_l1_sign_free))
+        # for i in range(13):
+        #     step_alpha = params.alpha + i*0.1
+        #     total_loss, total_acc_l1_sign_free = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l1_sign_free, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = res, alpha = step_alpha, num_iter = params.num_iter)
+        #     print('Alpha: {:.4f}. Test Acc L1 signfree: {:.4f}'.format(step_alpha, total_acc_l1_sign_free))
         for i in range(5):
             step_alpha = params.alpha_topk + i*0.1
             total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha)

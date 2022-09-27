@@ -70,7 +70,7 @@ train_batches = Batches(train_set_x, batch_size, shuffle=True, set_random_choice
 test_batches = Batches(test_set, batch_size, shuffle=False, num_workers=2, gpu_id = torch.cuda.current_device())
 
 
-model = PreActResNet18().cuda()
+model = PreActResNet18(10).cuda()
 # for m in model.children(): 
 #     if not isinstance(m, nn.BatchNorm2d):
 #         m.half()   
