@@ -12,6 +12,10 @@ parser.add_argument("--dataset", type=str, default = 'cifar10')
 parser.add_argument("--alpha", type=float, default = 0.05)
 parser.add_argument("--alpha_topk", type=float, default = 0.05)
 parser.add_argument("--alpha_top1", type=float, default = 0.05)
+parser.add_argument("--attack_step_interval1", type=float, default = 0.5)
+parser.add_argument("--attack_step_interval2", type=float, default = 1)
+parser.add_argument("--attack_step_num1", type=int, default = 5)
+parser.add_argument("--attack_step_num2", type=int, default = 5)
 parser.add_argument("--pgd_norm", type=int, default = 0)
 parser.add_argument("--num_iter", type=int, default = 50)
 parser.add_argument("--num_stop", type=int, default = 500)
@@ -81,9 +85,14 @@ DATA_DIR = './data'
 dataset = cifar10(DATA_DIR)
 t = Timer()
 
-print('Preprocessing test data')
-test_set = list(zip(transpose(normalise2(dataset['test']['data'])), dataset['test']['labels']))
-print('Finished in {0:.2} seconds'.format(t()))
+# print('Preprocessing test data')
+# test_set = list(zip(transpose(normalise2(dataset['test']['data'])), dataset['test']['labels']))
+# print('Finished in {0:.2} seconds'.format(t()))
+
+train_set, test_set = set_dataset(DATA_DIR, params)
+
+train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2)
+test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=2)
 
 
 def get_attack(attack, fmodel):
@@ -288,17 +297,17 @@ def test_pgd(model_name, clean = False):
         # total_loss, total_acc_inf = epoch_adversarial(test_batches, None, model, epoch_i, pgd_linf, device = device, stop = True, num_stop=params.num_stop, num_iter = params.num_iter, restarts = res)
         # print('Test Acc Inf: {0:.4f}'.format(total_acc_inf))
     elif params.pgd_norm == 11:
-        for i in range(5):
-            step_alpha = params.alpha + i*0.03
-            total_loss, total_acc_l1_sign_free = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l1_sign_free, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = res, alpha = step_alpha, num_iter = params.num_iter)
+        for i in range(params.attack_step_num1):
+            step_alpha = params.alpha + i*params.attack_step_interval1
+            total_loss, total_acc_l1_sign_free = epoch_adversarial_recon(test_loader, model, epoch_i, pgd_l1_sign_free, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = res, alpha = step_alpha, num_iter = params.num_iter)
             print('Alpha: {:.4f}. Test Acc L1 signfree: {:.4f}'.format(step_alpha, total_acc_l1_sign_free))
         # for i in range(13):
         #     step_alpha = params.alpha + i*0.1
         #     total_loss, total_acc_l1_sign_free = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l1_sign_free, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = res, alpha = step_alpha, num_iter = params.num_iter)
         #     print('Alpha: {:.4f}. Test Acc L1 signfree: {:.4f}'.format(step_alpha, total_acc_l1_sign_free))
-        for i in range(5):
-            step_alpha = params.alpha_topk + i*0.2
-            total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha)
+        for i in range(params.attack_step_num2):
+            step_alpha = params.alpha_topk + i*params.attack_step_interval2
+            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha)
             print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
 
 def fast_adversarial_DDN(model_name):

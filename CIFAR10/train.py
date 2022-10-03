@@ -41,6 +41,11 @@ device_id = params.gpu_id
 device = torch.device("cuda:{0}".format(device_id) if torch.cuda.is_available() else "cpu")
 torch.cuda.set_device(int(device_id))
 
+model = PreActResNet18(num_classes=10).cuda()
+model_name = 'Final/pgd_l1_topk_63287711_1/iter_50'
+model.load_state_dict(torch.load(model_name+".pt", map_location = device))
+input('check loaded.')
+
 if torch.cuda.is_available():
     # torch.manual_seed(args.seed)
     torch.cuda.manual_seed(params.seed)
@@ -71,6 +76,9 @@ test_batches = Batches(test_set, batch_size, shuffle=False, num_workers=2, gpu_i
 
 
 model = PreActResNet18(10).cuda()
+model_name = 'Final/pgd_l1_topk_63287711_1/iter_50'
+model.load_state_dict(torch.load(model_name+".pt", map_location = device))
+input('check loaded1.')
 # for m in model.children(): 
 #     if not isinstance(m, nn.BatchNorm2d):
 #         m.half()   
