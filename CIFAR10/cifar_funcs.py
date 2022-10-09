@@ -90,8 +90,9 @@ def pgd_l2(model, X, y, epsilon=0.5, alpha=0.05, num_iter = 50, device = "cuda:0
     return max_delta    
 
 
-def pgd_l1_topk(model, X,y, epsilon = 12, alpha = 1, num_iter = 20, k = 20, device = "cuda:1", restarts = 1, version = 0):
+def pgd_l1_topk(model, X,y, epsilon = 12, alpha = 1, num_iter = 20, k = 20, device = "cuda:1", restarts = 1, version = 0, l1_topk_mod = 'normal'):
     #Gap : Dont attack pixels closer than the gap value to 0 or 1
+    # l1_topk_mod: normal (the same as baseline), random_k, adaptive_step, no
     gap = 0
     max_delta = torch.zeros_like(X)
     delta = torch.zeros_like(X, requires_grad = True)
@@ -104,7 +105,8 @@ def pgd_l1_topk(model, X,y, epsilon = 12, alpha = 1, num_iter = 20, k = 20, devi
         #Finding the correct examples so as to attack only them only for version 1
         loss = nn.CrossEntropyLoss()(model(X+delta), y)
         loss.backward()
-        k = random.randint(80,99)
+        if l1_topk_mod in ['normal', 'random_k']:
+            k = random.randint(80,99)
         # alpha = 0.05/k*20
         # print(delta.grad.detach().device)
         # print(delta.grad.detach())
@@ -114,7 +116,7 @@ def pgd_l1_topk(model, X,y, epsilon = 12, alpha = 1, num_iter = 20, k = 20, devi
             print(output)
             print(y)
             raise('Norm is 0 again')
-        delta.data += alpha*correct*l1_dir_topk(delta.grad.detach(), delta.data, X, k)
+        delta.data += alpha*correct*l1_dir_topk(delta.grad.detach(), delta.data, X, k, l1_topk_mod=l1_topk_mod)
         if (norms_l1(delta) > epsilon).any():
             delta.data = proj_l1ball(delta.data, epsilon, device)
             # print(norms_l1(delta.data))
@@ -137,9 +139,10 @@ def pgd_l1_topk(model, X,y, epsilon = 12, alpha = 1, num_iter = 20, k = 20, devi
             #Finding the correct examples so as to attack only them only for version 1
             loss = nn.CrossEntropyLoss()(model(X+delta), y)
             loss.backward()
-            k = random.randint(80,99)
+            if l1_topk_mod in ['normal', 'random_k']:
+                k = random.randint(80,99)
             # alpha = 0.05/k*20
-            delta.data += alpha*correct*l1_dir_topk(delta.grad.detach(), delta.data, X,k)
+            delta.data += alpha*correct*l1_dir_topk(delta.grad.detach(), delta.data, X,k, l1_topk_mod=l1_topk_mod)
             if (norms_l1(delta) > epsilon).any():
                 delta.data = proj_l1ball(delta.data, epsilon, device)
             delta.data = torch.min(torch.max(delta.detach(), -X), 1-X) # clip X+delta to [0,1] 
@@ -391,8 +394,8 @@ def pgd_l1_sign_free_momentum(model, X, y, epsilon = 12, alpha = 0.05, num_iter 
 
     return max_delta
 
-def pgd_linf(model, X, y, epsilon=0.03, alpha=0.003, num_iter = 10, device = "cuda:0", restarts = 0, version = 0):
-    epsilon = 8. / 255.
+def pgd_linf(model, X, y, epsilon=0.03, epsilon_255=8, alpha=0.003, num_iter = 10, device = "cuda:0", restarts = 0, version = 0):
+    epsilon = float(epsilon_255) / 255.
     alpha = 1. / 255.
     """ Construct FGSM adversarial examples on the examples X"""
     max_delta = torch.zeros_like(X)
@@ -543,7 +546,8 @@ def kthlargest(tensor, k, dim=-1):
     val, idx = tensor.topk(k, dim = dim)
     return val[:,:,-1], idx[:,:,-1]
 
-def l1_dir_topk(grad, delta, X, k=20):
+def l1_dir_topk(grad, delta, X, k=20, l1_topk_mod='normal'):
+    # l1_topk_mod: normal (the same as baseline), random_k, adaptive_step, no
     X_curr = X + delta
     batch_size = X.shape[0]
     channels = X.shape[1]
@@ -558,8 +562,17 @@ def l1_dir_topk(grad, delta, X, k=20):
     # print(np.percentile(abs_grad, 100 - k, axis=(1, 2, 3), keepdims=True)[0][0][0])
     # input('check')
     tied_for_max = (abs_grad >= max_abs_grad).astype(np.float32)
-    num_ties = np.sum(tied_for_max, (1, 2, 3), keepdims=True)
-    optimal_perturbation = sign * tied_for_max / num_ties
+    if l1_topk_mod in ['normal', 'adaptive_step']:
+        num_ties = np.sum(tied_for_max, (1, 2, 3), keepdims=True)
+        optimal_perturbation = sign * tied_for_max / num_ties
+    elif l1_topk_mod in ['random_k', 'no']:
+        l2norm = np.linalg.norm(tied_for_max.reshape(batch_size, -1), axis=1)
+        l2norm = np.expand_dims(l2norm, axis=(1,2,3))
+        optimal_perturbation = sign * tied_for_max / l2norm
+        # l2norm = np.linalg.norm(optimal_perturbation.reshape(batch_size, -1), axis=1)
+        # print(l2norm)
+        # input('check')
+
 
     optimal_perturbation = torch.from_numpy(optimal_perturbation).to(delta.device)
     return optimal_perturbation.view(batch_size, channels, pix, pix)
