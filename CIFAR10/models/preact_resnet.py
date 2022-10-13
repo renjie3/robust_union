@@ -82,7 +82,7 @@ class PreActResNet(nn.Module):
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, output_feature=False):
         out = self.conv1(x)
         out = self.layer1(out)
         out = self.layer2(out)
@@ -90,8 +90,13 @@ class PreActResNet(nn.Module):
         out = self.layer4(out)
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
+        if output_feature:
+            feature = out
         out = self.linear(out)
-        return out
+        if output_feature:
+            return feature, out
+        else:
+            return out
 
 
 def PreActResNet18(num_classes):

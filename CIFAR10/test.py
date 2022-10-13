@@ -21,6 +21,8 @@ parser.add_argument("--pgd_norm", type=int, default = 0)
 parser.add_argument("--num_iter", type=int, default = 50)
 parser.add_argument("--num_stop", type=int, default = 500)
 parser.add_argument("--epsilon_255", type=float, default = 8)
+parser.add_argument("--save_name", type=str, default = 'cifar10')
+parser.add_argument("--alpha_l2", type=float, default = 0.166666)
 parser.add_argument("--seed", type=int, default = 0)
 parser.add_argument('--test_subset', action='store_true', default=False)
 parser.add_argument("--job_id", type=str, default = 'local')
@@ -40,6 +42,7 @@ from models import PreActResNet18
 import numpy as np
 import random
 import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from torchvision.datasets import CIFAR10
 from torch.utils.data import DataLoader, TensorDataset
@@ -243,7 +246,8 @@ def test_pgd(model_name, clean = False):
 
     print(model_name)
     print(device)
-    test_batches = Batches(test_set, batch_size, shuffle=False, num_workers=2, gpu_id = torch.cuda.current_device())
+    # test_batches = Batches(test_set, batch_size, shuffle=False, num_workers=2, gpu_id = torch.cuda.current_device())
+    # test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=2)
     if params.dataset == 'cifar10':
         num_classes = 10
     elif params.dataset == 'cifar100':
@@ -264,7 +268,7 @@ def test_pgd(model_name, clean = False):
     epoch_i = 0
     
     try:
-        total_loss, total_acc = epoch(test_batches, lr_schedule, model, epoch_i, criterion, opt = None, device = device, stop = False)
+        total_loss, total_acc = epoch_recon(test_loader, model, epoch_i, criterion, opt = None, device = device, stop = False)
     except:
         raise('problem')
         total_loss, total_acc = epoch(test_batches, lr_schedule, model, epoch_i, criterion, opt = None, device = device, stop = False)
@@ -288,81 +292,31 @@ def test_pgd(model_name, clean = False):
         total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_top1, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha)
         print('Test Acc 1: {0:.4f}'.format(total_acc_1))
     elif params.pgd_norm == 9:
-        total_loss, total_acc_l1_sign_free = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l1_sign_free, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = res, alpha = params.alpha, num_iter = params.num_iter)
+        total_loss, total_acc_l1_sign_free, feature_l1 = epoch_adversarial_recon(test_loader, model, epoch_i, pgd_l1_sign_free, return_feature=True, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = 0, alpha = params.alpha, num_iter = params.num_iter)
         print('Test Acc L1 signfree: {0:.4f}'.format(total_acc_l1_sign_free))
-        total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha_topk)
-        print('Test Acc 1: {0:.4f}'.format(total_acc_1))
+        # total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha_topk)
+        # print('Test Acc 1: {0:.4f}'.format(total_acc_1))
         # total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_top1, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha_top1)
         # print('Test Acc 1: {0:.4f}'.format(total_acc_1))
-        # total_loss, total_acc_2 = epoch_adversarial(test_batches, None, model, epoch_i, pgd_l2, device = device, stop = True, num_stop=params.num_stop, restarts = res, epsilon = 0.5, num_iter = params.num_iter, alpha = params.alpha_l2)
-        # print('Test Acc 2: {0:.4f}'.format(total_acc_2))
-        # total_loss, total_acc_inf = epoch_adversarial(test_batches, None, model, epoch_i, pgd_linf, device = device, stop = True, num_stop=params.num_stop, num_iter = params.num_iter, restarts = res)
-        # print('Test Acc Inf: {0:.4f}'.format(total_acc_inf))
+        total_loss, total_acc_2 = epoch_adversarial_recon(test_loader, model, epoch_i, pgd_l2, device = device, stop = True, num_stop=params.num_stop, restarts = 0, epsilon = 1, num_iter = params.num_iter, alpha = params.alpha_l2)
+        print('Test Acc 2: {0:.4f}'.format(total_acc_2))
+        total_loss, total_acc_inf, feature_linf = epoch_adversarial_recon(test_loader, model, epoch_i, pgd_linf, return_feature=True, device = device, stop = True, num_stop=params.num_stop, num_iter = params.num_iter, restarts = 0)
+        print('Test Acc Inf: {0:.4f}'.format(total_acc_inf))
+        
+        dis_l1_linf = torch.linalg.norm(feature_l1 - feature_linf, dim=1).mean()
+        print(dis_l1_linf)
+
     elif params.pgd_norm == 11:
         for i in range(9):
             step_alpha = 0.2 + i*0.2
             total_loss, total_acc_l1_sign_free = epoch_adversarial_recon(test_loader, model, epoch_i, pgd_l1_sign_free, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = res, alpha = step_alpha, num_iter = params.num_iter)
             print('Alpha: {:.4f}. Test Acc L1 signfree: {:.4f}'.format(step_alpha, total_acc_l1_sign_free))
-        for i in range(9):
-            step_alpha = 2 + i*1
-            total_loss, total_acc_l1_sign_free = epoch_adversarial_recon(test_loader, model, epoch_i, pgd_l1_sign_free, device = device, stop = params.test_subset, num_stop=params.num_stop, restarts = res, alpha = step_alpha, num_iter = params.num_iter)
-            print('Alpha: {:.4f}. Test Acc L1 signfree: {:.4f}'.format(step_alpha, total_acc_l1_sign_free))
-        for i in range(9):
-            step_alpha = 0.2 + i*0.2
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='normal')
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        for i in range(9):
-            step_alpha = 2 + i*1
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='normal')
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        print('normal done')
-
-        for i in range(9):
-            step_alpha = 0.2 + i*0.2
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='random_k')
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        for i in range(9):
-            step_alpha = 2 + i*1
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='random_k')
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        print('random_k done')
 
     elif params.pgd_norm == 12:
 
         for i in range(9):
             step_alpha = 0.2 + i*0.2
             total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='adaptive_step', k=80)
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        for i in range(9):
-            step_alpha = 2 + i*1
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='adaptive_step', k=80)
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        
-        for i in range(9):
-            step_alpha = 0.2 + i*0.2
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='adaptive_step', k=90)
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        for i in range(9):
-            step_alpha = 2 + i*1
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='adaptive_step', k=90)
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-
-        for i in range(9):
-            step_alpha = 0.2 + i*0.2
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='adaptive_step', k=95)
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        for i in range(9):
-            step_alpha = 2 + i*1
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='adaptive_step', k=95)
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        
-        for i in range(9):
-            step_alpha = 0.2 + i*0.2
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='adaptive_step', k=99)
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        for i in range(9):
-            step_alpha = 2 + i*1
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='adaptive_step', k=99)
             print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
         print('adaptive_step done')
 
@@ -372,37 +326,11 @@ def test_pgd(model_name, clean = False):
             step_alpha = 0.2 + i*0.2
             total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='no', k=80)
             print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        for i in range(9):
-            step_alpha = 2 + i*1
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='no', k=80)
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
 
-        for i in range(9):
-            step_alpha = 0.2 + i*0.2
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='no', k=90)
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        for i in range(9):
-            step_alpha = 2 + i*1
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='no', k=90)
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        
-        for i in range(9):
-            step_alpha = 0.2 + i*0.2
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='no', k=95)
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        for i in range(9):
-            step_alpha = 2 + i*1
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='no', k=95)
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
+    elif params.pgd_norm == 14:
+        # plot adversarial here.
+        test_visualization(model, test_loader, save_name = params.save_name)
 
-        for i in range(9):
-            step_alpha = 0.2 + i*0.2
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='no', k=99)
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
-        for i in range(9):
-            step_alpha = 2 + i*1
-            total_loss, total_acc_1 = epoch_adversarial_recon(test_loader,  model, epoch_i, pgd_l1_topk, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=step_alpha, l1_topk_mod='no', k=99)
-            print('Alpha: {:.4f}. Test Acc 1: {:.4f}'.format(step_alpha, total_acc_1))
 
 def fast_adversarial_DDN(model_name):
     #Saves the minimum epsilon value for successfully attacking each image via PGD based attack as an npy file in the folder corresponding to model_name
