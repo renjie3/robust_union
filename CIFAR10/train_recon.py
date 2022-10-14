@@ -24,6 +24,9 @@ parser.add_argument("--mu", type=float, default = 0.5)
 parser.add_argument("--feature_space", action='store_true', default=False)
 parser.add_argument("--seed", type=int, default = 0)
 parser.add_argument("--lr", type=float, default = 0.05)
+parser.add_argument("--load_model", action='store_true', default=False)
+parser.add_argument("--load_model_path", type=str, default = '')
+parser.add_argument("--debug", action='store_true', default=False)
 parser.add_argument("--job_id", type=str, default = 'local')
 parser.add_argument('--local', default='', type=str, help='The gpu number used on developing node.')
 
@@ -36,7 +39,7 @@ if params.local != '':
 import sys
 sys.path.append('./models/')
 import torch
-from models import PreActResNet18
+from models import PreActResNet18, ResNet18
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
@@ -95,10 +98,14 @@ if params.dataset == 'cifar10':
 elif params.dataset == 'cifar100':
     num_classes = 100
 
-model = PreActResNet18(num_classes=num_classes).cuda()
+# model = PreActResNet18(num_classes=num_classes).cuda()
+model = ResNet18().to(device)
 # for m in model.children(): 
 #     if not isinstance(m, nn.BatchNorm2d):
 #         m.half()   
+
+if params.load_model:
+    model.load_state_dict(torch.load("{}.pt".format(params.load_model_path), map_location = device))
         
 opt = optim.SGD(model.parameters(), lr=params.lr, momentum=0.9, weight_decay=5e-4)
 criterion = nn.CrossEntropyLoss()
@@ -153,8 +160,11 @@ for epoch_i in range(1,epochs+1):
     elif choice == "trades":
         train_loss, train_acc = trades(train_loader, model, opt, epoch_i, epsilon_l1 = params.epsilon_l_1, alpha_l1 = params.alpha, step_size_255=params.alpha_linf_255, epsilon_255=params.epsilon_l_inf_255, perturb_steps=params.num_iter, beta=params.beta, mu=params.mu, distance=params.trades_distance, device = device, feature_space=params.feature_space)
     else:
-        train_loss, train_acc = epoch_adversarial_recon(train_loader, model, epoch_i, attack, criterion, opt = opt, device = device, alpha = params.alpha, num_iter = params.num_iter, restarts=params.restarts)
+        pass
+        # train_loss, train_acc = epoch_adversarial_recon(train_loader, model, epoch_i, attack, criterion, opt = opt, device = device, alpha = params.alpha, num_iter = params.num_iter, restarts=params.restarts)
     lr_schedule.step()
+
+    # model.eval()
 
     if epoch_i % 5 == 0 or epoch_i < 5:
         total_loss, total_acc = epoch_recon(test_loader, model, epoch_i, criterion, opt = None, device = device)
@@ -162,6 +172,11 @@ for epoch_i in range(1,epochs+1):
         total_loss, total_acc_1 = epoch_adversarial_recon(test_loader, model, epoch_i,  pgd_l1_topk, criterion, opt = None, device = device, stop = True, num_stop=params.num_stop)
         total_loss, total_acc_2 = epoch_adversarial_recon(test_loader, model, epoch_i,  pgd_l2, criterion, opt = None, device = device, stop = True, num_stop=params.num_stop,)
         total_loss, total_acc_3 = epoch_adversarial_recon(test_loader, model, epoch_i,  pgd_linf, criterion, opt = None, device = device, stop = True, num_stop=params.num_stop,)
+        if params.debug and params.load_model:
+            sys.exit()
         myprint('Epoch: {7}, Clean Acc: {6:.4f} Train Acc: {5:.4f}, Test Acc 1_sign_free: {4:.4f}, Test Acc 1: {3:.4f}, Test Acc 2: {2:.4f}, Test Acc inf: {1:.4f}, Time: {0:.1f}'.format(time.time()-start_time, total_acc_3, total_acc_2,total_acc_1, total_acc_1_sign_free, train_acc, total_acc, epoch_i))    
         if epoch_i >= 40:
             torch.save(model.state_dict(), "{0}/iter_{1}.pt".format(model_dir, str(epoch_i)))
+        if params.debug:
+            torch.save(model.state_dict(), "{0}/iter_{1}.pt".format(model_dir, str(epoch_i)))
+            sys.exit()

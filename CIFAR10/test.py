@@ -38,7 +38,7 @@ if params.local != '':
 import sys
 sys.path.append('./models/')
 import torch
-from models import PreActResNet18
+from models import PreActResNet18, ResNet18
 import numpy as np
 import random
 import matplotlib
@@ -252,7 +252,8 @@ def test_pgd(model_name, clean = False):
         num_classes = 10
     elif params.dataset == 'cifar100':
         num_classes = 100
-    model = PreActResNet18(num_classes=num_classes).to(device)
+    # model = PreActResNet18(num_classes=num_classes).to(device)
+    model = ResNet18().cuda()
     # for m in model.children(): 
     #     if not isinstance(m, nn.BatchNorm2d):
     #         m.half()   
@@ -298,7 +299,7 @@ def test_pgd(model_name, clean = False):
         # print('Test Acc 1: {0:.4f}'.format(total_acc_1))
         # total_loss, total_acc_1 = epoch_adversarial(test_batches, None,  model, epoch_i, pgd_l1_top1, device = device, stop = True, num_stop=params.num_stop, restarts = res, num_iter = params.num_iter, alpha=params.alpha_top1)
         # print('Test Acc 1: {0:.4f}'.format(total_acc_1))
-        total_loss, total_acc_2 = epoch_adversarial_recon(test_loader, model, epoch_i, pgd_l2, device = device, stop = True, num_stop=params.num_stop, restarts = 0, epsilon = 1, num_iter = params.num_iter, alpha = params.alpha_l2)
+        total_loss, total_acc_2 = epoch_adversarial_recon(test_loader, model, epoch_i, pgd_l2, device = device, stop = True, num_stop=params.num_stop, restarts = 0, epsilon = 0.5, num_iter = params.num_iter, alpha = params.alpha_l2)
         print('Test Acc 2: {0:.4f}'.format(total_acc_2))
         total_loss, total_acc_inf, feature_linf = epoch_adversarial_recon(test_loader, model, epoch_i, pgd_linf, return_feature=True, device = device, stop = True, num_stop=params.num_stop, num_iter = params.num_iter, restarts = 0)
         print('Test Acc Inf: {0:.4f}'.format(total_acc_inf))
@@ -379,7 +380,8 @@ def test_saver(model_name):
     attacks_l1 = torch.ones((batch_size, 12))*1000
     attacks_l2 = torch.ones((batch_size, 12))*1000
     attacks_linf = torch.ones((batch_size, 12))*1000
-    model = PreActResNet18().cuda()
+    # model = PreActResNet18().cuda()
+    model = ResNet18().cuda()
     # for m in model.children(): 
     #     if not isinstance(m, nn.BatchNorm2d):
     #         m.half()   

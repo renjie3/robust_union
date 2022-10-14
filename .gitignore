@@ -4,7 +4,6 @@ MNIST/data
 MNIST/Models
 MNIST/Final
 CIFAR10/RobustModels
-CIFAR10/models
 CIFAR10/Final
 MNIST/Selected
 MNIST_RES
